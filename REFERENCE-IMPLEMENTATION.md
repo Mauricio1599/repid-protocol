@@ -1,0 +1,87 @@
+# Reference Implementation Map (non-normative)
+
+> **This document creates no conformity obligation.** It records where each
+> requirement is implemented and tested, so that a reader can verify the claims
+> instead of taking them on trust. A conformant implementation may differ
+> everywhere it is described here.
+
+## 1. What is normative and what is not
+
+| Artefact | Location | Status |
+|---|---|---|
+| Specifications | `spec/` in **this** repository | **normative** |
+| Covenant sources | `contracts/*.cash` in **this** repository | **normative** — the canonical text of the covenants |
+| Compiled artifacts | `artifacts/*.json` in **this** repository | **normative** — verified by `tools/check-artifacts.mjs` |
+| Constants and schemas | `protocol/` in **this** repository | **normative** |
+| Conformance suite | `conformance/` in **this** repository | **normative** — the shared definition of "conformant" |
+| Recognition SDK | `repid-sdk` (separate repository) | reference implementation, non-normative |
+| Demo / interoperability app | demo repository (separate repository) | reference implementation, non-normative |
+
+Paths given below as `ref:` belong to the **external** reference implementation
+repositories and are deliberately not clickable from here. They are recorded
+because the mapping is the evidence, not because this repository depends on them.
+
+## 2. Requirement → implementation → test
+
+Legend: **local** = this repository; **ref** = external reference implementation.
+
+| Requirement | Implementation | Evidence |
+|---|---|---|
+| RF-O03–RF-O07 (vault invariants) | `contracts/identity_vault.cash` (local) | **Real VM**, external: `ref:scripts/chipnet-vault-e2e.mjs` — mint with locked collateral, top-up requiring `value >= oldCollateral`, burn returning the collateral without re-issuing the category, re-mint. Plus source inspection. The 17 mock-based unit tests that covered the ABI were removed, so there is **no automated regression coverage of the covenant ABI**. |
+| RF-O01–RF-O02, RF-E01, RF-M03, RF-V07 | `contracts/identity_vault.cash`, `ref:indexer` | `ref:packages/indexer/test/identity_vault_indexer.test.js` (5), the real Chipnet vault E2E, and inspection. The mock-based `test/identity_vault.test.js` (17) and `test/identity_genesis.test.js` (8) were removed. |
+| RF-O08–RF-O11, RF-E04, RF-M02 | `contracts/receipt_genesis.cash`, `ref:indexer` | **Real VM**, external: `ref:scripts/chipnet-e2e.mjs` (11/11 PASS) — joint-signature genesis producing two Rating Rights. Plus source inspection. The 10 mock-based unit tests in `test/receipt_genesis.test.js` were removed, so there is **no automated regression coverage of the covenant ABI**. |
+| RF-O12–RF-O14, RF-E05, RF-S01, RF-S03 | `ref:indexer` | `ref:packages/indexer/test/issued_rating_and_indexer.test.js` (11) |
+| RF-O15, RF-E06, RF-V08 | `ref:indexer` | `ref:packages/indexer/test/platform_confirmation.test.js` (4) |
+| RF-O16–RF-O17, RF-E07, RF-S02 | `ref:indexer` | `ref:packages/indexer/test/trust_link.test.js` (3) |
+| RF-E02, RF-E03, RF-V05, RF-V06, RF-V09 | `ref:indexer` | `ref:packages/indexer/test/identity_vault_indexer.test.js` (5) |
+| RF-M01, RF-I03 | `ref:interaction` (off-chain) | `ref:test/interaction.test.js` (9) |
+| RF-R01–RF-R04 (reputation, **not core**) | `ref:server/reputation.mjs` | `ref:test/reputation.test.js` (20) |
+| RF-V03, RF-V04, RF-V10, RF-V11, RF-C03 | `ref:indexer`, `ref:server` | `ref:test/e2e_server.test.js` — 3 run unconditionally; the 38 blocks that mint a genesis are **tBCH-gated** and run only with `REPID_E2E_FUNDS=1`, because the reference demo is Chipnet-only and boots on a temporary, unfunded data directory. |
+| Field schema of the seven events (SPEC-008 §3) | `protocol/schemas/repid-fact.schema.json` (local) | `conformance/schema.test.mjs` (local), including the five facts reconstructed from a real Chipnet run |
+| Wire format and recognition (SPEC-009) | `protocol/constants.json` (local) | `conformance/schema.test.mjs` (local) |
+| Covenant artifacts reproduce | `contracts/` + `artifacts/` (local) | `tools/check-artifacts.mjs` (local), which recompiles and compares the full artifact |
+
+## 3. Honest coverage
+
+Stated plainly, because a coverage claim that overstates itself is worse than
+none:
+
+- **The boundary and negative requirements** — absence of any on-chain score,
+  absence of a central authority, the §7 interpretation limits — are verified by
+  inspection and by the absence of violating code, **not** by automated test.
+- **`MockNetworkProvider` never ran the VM** and never validated signatures or
+  scripts. A successful `sendRawTransaction` is not evidence that a covenant is
+  correct. The removed covenant unit tests relied on it, so what was lost by
+  removing them is **ABI-shape regression coverage**, not real-VM evidence.
+- **P2PKH "impostor" cases are inconclusive.** `debug()` rejects transactions
+  using a custom `Unlocker` before evaluating them, so no coverage is claimed.
+- **The contract `fingerprint` is not a conformance anchor.** It does not change
+  when a contract's logic changes (measured; see SPEC-005 §6). Conformance is
+  established by recompiling and comparing the full artifact.
+- **The strongest issuance evidence is real-VM E2E**, external to this
+  repository: `ref:scripts/chipnet-e2e.mjs` and `ref:scripts/chipnet-vault-e2e.mjs`.
+- **UI coverage is manual.** No automated UI test is claimed; the reference
+  demo is exercised by hand via its own testing guide.
+
+## 4. External suite status
+
+The reference implementation's suite, as last measured: **93 tests, 0 failures**
+across 7 files, of which **55 run unconditionally and 38 are tBCH-gated**. The
+38 gated tests mint a genesis and have **not** been re-run against funded
+wallets since the gate was added; they are declared unverified rather than
+passing. Setting `REPID_E2E_FUNDS=1` enables them but does not fund anything: a
+reachable, funded wallet is still required.
+
+This number describes the external suite. It is not a claim about the conformance
+suite in this repository, which is small and runs unconditionally.
+
+## 5. Known drift to resolve
+
+- The reference demo's persisted facts carry application annotations (`at`, and
+  `roles` on Receipts) that are **not** part of the protocol fact. The schema in
+  `protocol/schemas/repid-fact.schema.json` is closed and rejects them. The demo
+  must wrap or namespace them; until then its stored facts are not
+  schema-conformant as-is.
+- An earlier negative test in this repository wrongly suggested the artifact
+  fingerprint would catch a logic change. It does not. The check now compares
+  bytecode, ABI, source and debug bytecode.
