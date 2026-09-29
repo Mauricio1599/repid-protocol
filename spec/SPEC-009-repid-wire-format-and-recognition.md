@@ -97,6 +97,24 @@ OP_RETURN  <push tag>  <push payload>  [further pushes...]
   `PUSHDATA1` (`0x4c`), `PUSHDATA2` (`0x4d`) or `PUSHDATA4` (`0x4e`) form, or if
   any push declares a length of `0` or greater than `75`, then the recognizer
   must treat the `OP_RETURN` as unparseable and emit **no fact**.
+- **RF-W45** (Undesired Behavior): If a push declares a length that **exceeds
+  the bytes remaining** in the script, the recognizer must treat the
+  `OP_RETURN` as unparseable and emit **no fact**. A declared length that the
+  script cannot satisfy is not a short chunk; it is a malformed container.
+
+  This is the truncation companion to RF-W02, which bounds the declared length
+  from above but not against the bytes that actually follow. It is stated as its
+  own requirement because it is the case a length-bounded reader gets wrong by
+  accident: slicing `len` bytes out of a buffer with fewer left yields the
+  shorter chunk with no error at all, so a script whose last push claims five
+  bytes and carries one is read as a well-formed one-byte payload — and under
+  `REPID_RATING1` (§4) that is a score. The look-alike is the one §3.2 warns
+  about, reached by truncation rather than by a wrong value.
+
+  A suffixed identifier such as `RF-W02a` was considered and rejected: the
+  repository's specification checker matches `RF-[A-Z]?\d+`, so a suffixed ID is
+  read as its numeric prefix and the requirement becomes invisible to the
+  tooling that is supposed to track it.
 - **RF-W03** (Ubiquity): A conformant recognizer must require **at least two**
   pushes: the tag and at least one payload chunk.
 - **RF-W04** (Ubiquity): The first push must decode as UTF-8 and must equal the
