@@ -43,7 +43,7 @@ Legend: **local** = this repository; **sdk** = the SDK repository;
 | RF-R01–RF-R04 (reputation, **not core**) | `demo:server/reputation.mjs` | `demo:test/reputation.test.js` (20) |
 | RF-V03, RF-V04, RF-V10, RF-V11, RF-C03 | `sdk`, `demo:server` | `demo:test/e2e_server.test.js` — 3 run unconditionally; the 38 blocks that mint a genesis are **tBCH-gated** and run only with `REPID_E2E_FUNDS=1`, because the reference demo is Chipnet-only and boots on a temporary, unfunded data directory. |
 | Field schema of the seven events (SPEC-008 §3) | `protocol/schemas/repid-fact.schema.json` (local) | `conformance/schema.test.mjs` (local) and `sdk:test/schema_conformance.test.ts` (9), including the five facts reconstructed from a real Chipnet run |
-| Wire format and recognition (SPEC-009) | `protocol/constants.json` (local) | `conformance/schema.test.mjs` (local) and `sdk:test/protocol_inputs.test.ts` (5) |
+| Wire format and recognition (SPEC-009) | `protocol/constants.json` (local), `sdk:src/bytes.ts`, `sdk:src/recognize.ts` | `conformance/schema.test.mjs` (local), `sdk:test/protocol_inputs.test.ts` (5), `sdk:test/op_return_encoding.test.ts` (23, RF-W01–RF-W05 and RF-W45) and `sdk:test/receipt_genesis_shape.test.ts` (15, RF-W38–RF-W40). The open vectors are listed in SPEC-009 Annex B.2 |
 | Rating Right is single-use, spent even when invalid (RF-W21) | `sdk` | `sdk:test/rating_right_consumption.test.ts` (5) — the five cases that regressed this behaviour |
 | Covenant artifacts reproduce | `contracts/` + `artifacts/` (local) | `tools/check-artifacts.mjs` (local), which recompiles and compares the full artifact |
 
@@ -55,10 +55,25 @@ none:
 - **The boundary and negative requirements** — absence of any on-chain score,
   absence of a central authority, the §7 interpretation limits — are verified by
   inspection and by the absence of violating code, **not** by automated test.
-- **`MockNetworkProvider` never ran the VM** and never validated signatures or
-  scripts. A successful `sendRawTransaction` is not evidence that a covenant is
-  correct. The removed covenant unit tests relied on it, so what was lost by
-  removing them is **ABI-shape regression coverage**, not real-VM evidence.
+- **`MockNetworkProvider` does not validate raw transactions, but the builder does
+  run the VM for contract inputs.** Two different things were previously
+  conflated here, and the distinction matters for what a test proves.
+  `provider.sendRawTransaction()` takes bytes and returns a txid: it does not
+  execute the Bitcoin VM and does not check signatures or scripts, so a
+  successful call is not evidence that a covenant is correct. But
+  `TransactionBuilder.send()` with a contract input runs that contract's
+  `require` statements in a debug VM and throws `Require statement failed` when
+  one does not hold. This was measured while adding the SPEC-009 §9.2 tests: a
+  three-output Receipt is refused by `receipt_genesis` at
+  `require(tx.outputs.length == 4)` before the recognizer is reached.
+  - Consequence for negative tests: a malformed transaction that a covenant
+    already forbids **cannot** be built through the builder, so a test that tries
+    to build one proves nothing. `sdk:test/receipt_genesis_shape.test.ts`
+    therefore mints one canonical Receipt and perturbs the decoded outputs.
+  - Consequence for evidence: a covenant's `require` statements *are* exercised
+    by every builder-driven test. What those tests do not establish is the
+    behaviour of the Bitcoin VM outside the builder, or the fact that the
+    transaction is valid under consensus rules.
 - **P2PKH "impostor" cases are inconclusive.** `debug()` rejects transactions
   using a custom `Unlocker` before evaluating them, so no coverage is claimed.
 - **The contract `fingerprint` is not a conformance anchor.** It does not change

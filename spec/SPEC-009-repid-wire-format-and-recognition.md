@@ -354,14 +354,16 @@ The full rule-to-decoder-to-test mapping is in `REFERENCE-IMPLEMENTATION.md`,
 which keeps it out of this specification because the reference implementation is
 refactored independently of the protocol.
 
-Two obligations belong here, because they constrain what a recognizer may claim:
+One obligation belongs here, because it constrains what a recognizer may claim:
 
-- **RF-W01–RF-W05 (container parsing) and RF-W38–RF-W40 (Receipt genesis shape) have
-  no automated coverage.** They are specified and implemented but unverified by
-  test. This is the protocol's largest open gap, tracked in Annex B.
 - **RF-W28–RF-W34 depend on a durable store.** A recognizer that cannot retain and
   reconstruct the state of SPEC-005 RF-12 cannot satisfy them, regardless of how
   correctly it reads a single transaction.
+
+RF-W01–RF-W05 (container parsing) and RF-W38–RF-W40 (Receipt genesis shape) were
+listed here as unverified. They are now covered: 38 tests in the reference SDK
+(`op_return_encoding` 23, `receipt_genesis_shape` 15). RF-W45, the truncation
+companion to RF-W02, was added at the same time and is covered with them.
 
 ## 11. Known Limitations
 
@@ -423,18 +425,39 @@ will drift as the reference is refactored.
 
 ## Annex B — Conformance Vectors and Test Obligations
 
-The following vectors are **required** by §3, §4 and §6 but are **not yet
-covered** by an automated test (Constitution Article 3: an RF is not complete
-without a test). They are recorded here as open obligations, not as passing
-results.
+Constitution Article 3: an RF is not complete without a test. The vectors below
+are the ones §3, §4 and §6 require. They are split by whether an automated test
+currently exercises them, because listing a covered vector next to an open one
+is how a gap goes unnoticed.
+
+### B.1 Covered
+
+| Vector | Expected | Rule | Test |
+|---|---|---|---|
+| `OP_RETURN` with a `PUSHDATA1` (`0x4c`) push | no fact | RF-W02 | `op_return_encoding` |
+| `OP_RETURN` with a `PUSHDATA2` (`0x4d`) push | no fact | RF-W02 | `op_return_encoding` |
+| `OP_RETURN` with a `PUSHDATA4` (`0x4e`) push | no fact | RF-W02 | `op_return_encoding` |
+| `OP_RETURN` with an `OP_0` (`0x00`) push | no fact | RF-W02 | `op_return_encoding` |
+| `OP_RETURN` with a push longer than 75 bytes | no fact | RF-W02 | `op_return_encoding` |
+| `OP_RETURN` with a single chunk (tag only) | no fact | RF-W03 | `op_return_encoding` |
+| `OP_RETURN` not opened by `0x6a` | no fact | RF-W03 | `op_return_encoding` |
+| Tag matched case-insensitively, by prefix or as a prefix | no fact | RF-W04 | `op_return_encoding` |
+| Payload chunks merged into one | no fact | RF-W05 | `op_return_encoding` |
+| A push declaring more bytes than remain | no fact | RF-W45 | `op_return_encoding` |
+| Receipt genesis with 2 or 5 outputs | no fact | RF-W38 | `receipt_genesis_shape` |
+| Receipt genesis whose change output carries a token | no fact | RF-W38 | `receipt_genesis_shape` |
+| Receipt genesis with capability `mutable` or `minting` | no fact | RF-W39 | `receipt_genesis_shape` |
+| Receipt NFTs carrying a fungible amount | no fact | RF-W39 | `receipt_genesis_shape` |
+| Receipt NFTs in two different categories | no fact | RF-W39 | `receipt_genesis_shape` |
+| Rating Right committing to its own holder | no fact | RF-W40 | `receipt_genesis_shape` |
+| Rating Right with swapped commitments | no fact | RF-W40 | `receipt_genesis_shape` |
+| Rating Right with an empty commitment | no fact | RF-W40 | `receipt_genesis_shape` |
+| Receipt with a non-empty commitment | no fact | RF-W40 | `receipt_genesis_shape` |
+
+### B.2 Still open
 
 | Vector | Expected | Rule |
 |---|---|---|
-| `OP_RETURN` with a `PUSHDATA1` (`0x4c`) push | no fact | RF-W02 |
-| `OP_RETURN` with `PUSHDATA2` (`0x4d`) / `PUSHDATA4` (`0x4e`) | no fact | RF-W02 |
-| `OP_RETURN` with an `OP_0` (`0x00`) push | no fact | RF-W02 |
-| `OP_RETURN` with a single chunk (tag only) | no fact | RF-W03 |
-| Tag matched case-insensitively or by prefix | no fact | RF-W04 |
 | `REPID_RATING1` with a 2-byte payload | no fact | RF-W07 |
 | `REPID_RATING1` with 3 chunks | no fact | RF-W05, RF-W07 |
 | `REPID_PLATFORM1` with a 20-byte payload (pkh-length) | no fact | RF-W10 |
@@ -443,10 +466,22 @@ results.
 | `PLATFORM1` / `TRUST1` whose first input has a non-standard unlocking script | no fact | RF-W17 |
 | A transaction matching two recognizers at once | the earlier recognizer in §7 wins | RF-W23 |
 
-**Coverage state**: the reference SDK ships 23 recognition tests
+**Coverage state**: the reference SDK ships 61 recognition tests
 (`identity_vault_indexer` 5, `issued_rating_and_indexer` 11,
-`platform_confirmation` 4, `trust_link` 3). The vectors above remain open, so
-**§3.1 container parsing and §9.2 Receipt genesis shape are specified but
-unverified**. The conformance suite in this repository covers the fact schema
-and the constants (`conformance/`), not the container parsing; that gap is
-tracked, not closed.
+`platform_confirmation` 4, `trust_link` 3, `op_return_encoding` 23,
+`receipt_genesis_shape` 15). **§3.1 container parsing and §9.2 Receipt genesis
+shape are therefore verified**, along with RF-W45, which did not exist when this
+annex was first written. The vectors in B.2 remain open. The conformance suite
+in this repository (`conformance/`) covers the fact schema and the constants,
+not container parsing, and is not a substitute for the SDK suite.
+
+One caveat on how the §9.2 vectors are reached, because it affects what they
+prove. A malformed Receipt cannot be produced through the `receipt_genesis`
+covenant: it enforces twenty `require` statements, and CashTokens itself refuses
+a `mutable` or `minting` NFT in a genesis, so the builder rejects the
+transaction before a recognizer sees it. `receipt_genesis_shape` therefore mints
+one canonical Receipt and perturbs the decoded outputs, so each vector differs
+from a valid Receipt in exactly one field. These tests show the recognizer
+rejects a shape on its own. They do not show the covenant would, because the
+covenant never gets the chance — and where the two agree, the recognizer's check
+is defense in depth rather than a live gap.
