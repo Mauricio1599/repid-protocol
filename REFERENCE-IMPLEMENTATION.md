@@ -110,11 +110,16 @@ conformance suite in this repository, which is small and runs unconditionally.
 
 ## 5. Known drift to resolve
 
-- The reference demo's persisted facts carry application annotations (`at`, and
-  `roles` on Receipts) that are **not** part of the protocol fact. The schema in
-  `protocol/schemas/repid-fact.schema.json` is closed and rejects them. The demo
-  must wrap or namespace them; until then its stored facts are not
-  schema-conformant as-is.
+- **Resolved (annotations are not facts).** The reference demo used to stamp
+  application annotations (`at`, and `roles` on Receipts) onto the recognized
+  fact before storing it. The schema in `protocol/schemas/repid-fact.schema.json`
+  is closed, so every persisted fact was invalid. The demo now stores the
+  recognized fact verbatim and keeps the annotations in a separate
+  `factAnnotations` map, keyed by txid, re-attached only when a response is
+  rendered for the console — the API is the interpretation layer, the stored
+  fact is not. State written before the change is migrated on load. The demo's
+  `test/persistence_conformance.test.js` guards it: it reads the fact shapes from
+  this schema and rejects any persisted fact that carries a key outside them.
 - An earlier negative test in this repository wrongly suggested the artifact
   fingerprint would catch a logic change. It does not. The check now compares
   bytecode, ABI, source and debug bytecode.
