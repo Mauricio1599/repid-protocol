@@ -29,7 +29,12 @@ const schema = JSON.parse(
   readFileSync(join(root, 'protocol', 'schemas', 'repid-fact.schema.json'), 'utf8'),
 );
 
-const ajv = new Ajv2020({ allErrors: true, strict: false });
+// Strict mode is on deliberately. It refuses to compile a schema whose rules are
+// ambiguous or silently ineffective, such as a `maximum` applied to a value whose
+// type was never declared -- a rule that would accept a string where a number was
+// meant without ever complaining. A normative schema that no strict validator can
+// compile is a defect, and it is cheaper to find it here than in an implementation.
+const ajv = new Ajv2020({ allErrors: true, strict: true });
 const validateSchema = ajv.compile(schema);
 
 // Annotations added by an application layer, not by the protocol. A recognizer

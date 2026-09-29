@@ -161,9 +161,10 @@
           "then": {
             "properties": {
               "score": {
+                "type": "integer",
                 "minimum": 1,
                 "maximum": 5,
-                "description": "A valid rating is necessarily within MIN_SCORE..MAX_SCORE."
+                "description": "A valid rating is necessarily within MIN_SCORE..MAX_SCORE. The type is restated here because this subschema is evaluated on its own; it is redundant with the enclosing score definition and does not change which facts are accepted."
               }
             }
           }
