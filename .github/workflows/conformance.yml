@@ -43,12 +43,14 @@ jobs:
           # A U+FFFD in a normative document is silent corruption: it renders as
           # a replacement character and the surrounding text keeps looking
           # almost right.
-          if grep -rlP '\x{FFFD}' --include='*.md' --include='*.json' --include='*.mjs' --include='*.cash' . ; then
+          if grep -rlP '\x{FFFD}' --include='*.md' --include='*.json' --include='*.mjs' --include='*.cash' \
+               --exclude-dir=node_modules --exclude-dir=.git . ; then
             echo "::error::found U+FFFD (replacement character) in a tracked file"
             exit 1
           fi
           echo "no U+FFFD found"
-          if grep -rlP '\r$' --include='*.md' --include='*.json' --include='*.mjs' --include='*.cash' . ; then
+          if grep -rlP '\r$' --include='*.md' --include='*.json' --include='*.mjs' --include='*.cash' \
+               --exclude-dir=node_modules --exclude-dir=.git . ; then
             echo "::error::found CRLF line endings; .gitattributes requires LF"
             exit 1
           fi
